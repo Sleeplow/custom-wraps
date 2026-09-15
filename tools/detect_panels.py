@@ -91,6 +91,51 @@ def flank(mask: np.ndarray, x0: int, x1: int, gap: int = 34):
     return [int(np.percentile(starts, 55)) + x0, y0, int(np.percentile(ends, 45)) + x0, y1]
 
 
+def blocks(mask: np.ndarray, x0: int, x1: int, runs=None):
+    """Contiguous stretches of door-height sheet metal down the flank column."""
+    runs = runs or longest_runs(mask, x0, x1)
+    widths = np.array([r[0] for r in runs], dtype=float)
+    threshold = 0.30 * widths.max()
+    out, start = [], None
+    for y in range(len(runs)):
+        on = widths[y] > threshold
+        if on and start is None:
+            start = y
+        elif not on and start is not None:
+            if y - start > 8:
+                out.append((start, y))
+            start = None
+    if start is not None and len(runs) - start > 8:
+        out.append((start, len(runs)))
+    return out
+
+
+def snap_to_doors(band, mask: np.ndarray, x0: int, x1: int):
+    """Trim the detected band back to the panels it actually covers.
+
+    The row scan happily runs from the front wing into the doors, which puts
+    the lettering across a panel gap and pushes it off centre. A panel counts
+    as covered when the band takes most of it, or when it accounts for most of
+    the band - the second case is the models whose two doors come out as one
+    block far longer than the band.
+    """
+    runs = longest_runs(mask, x0, x1)
+    span = band[3] - band[1]
+    kept = [
+        (b0, b1)
+        for b0, b1 in blocks(mask, x0, x1, runs)
+        for overlap in [max(0, min(b1, band[3]) - max(b0, band[1]))]
+        if overlap / (b1 - b0) >= 0.65 or overlap / span >= 0.40
+    ]
+    if not kept:
+        return band
+    y0, y1 = min(b[0] for b in kept), max(b[1] for b in kept)
+    rows = [runs[y] for y in range(y0, y1) if runs[y][0] > 0]
+    starts = np.array([r[1] for r in rows])
+    ends = np.array([r[2] for r in rows])
+    return [int(np.percentile(starts, 55)) + x0, y0, int(np.percentile(ends, 45)) + x0, y1]
+
+
 def main():
     layout = {"cybertruck": CYBERTRUCK}
     for template in sorted(glob.glob(str(ROOT / "*" / "template.png"))):
@@ -99,8 +144,8 @@ def main():
             continue
         mask = panel_mask(Path(template))
         h, w = mask.shape
-        left = flank(mask, 0, int(0.36 * w))
-        right = flank(mask, int(0.64 * w), w)
+        left = snap_to_doors(flank(mask, 0, int(0.36 * w)), mask, 0, int(0.36 * w))
+        right = snap_to_doors(flank(mask, int(0.64 * w), w), mask, int(0.64 * w), w)
         # the UV is symmetric: mirror whichever side was detected more fully
         if (left[3] - left[1]) >= (right[3] - right[1]):
             right = [w - left[2], left[1], w - left[0], left[3]]

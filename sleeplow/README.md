@@ -99,4 +99,6 @@ l'endroit, celle du haut est retournée verticalement.
 Ces deux conventions ont été déduites des wraps fournis par Tesla dans ce dépôt
 (`model3/example/Rudi.png` et `cybertruck/example/Graffiti_green.png`).
 `tools/detect_panels.py` repère ensuite automatiquement les portières de chaque
-gabarit pour que le lettrage tombe sur la tôle et pas dans un passage de roue.
+gabarit, puis recale la bande sur les panneaux réellement couverts : sans ce
+recalage le balayage part de l'aile avant et le lettrage se retrouve décentré,
+à cheval sur un joint de tôle.

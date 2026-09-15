@@ -170,6 +170,16 @@ def tint(mask: Image.Image, colour, alpha: float = 1.0) -> Image.Image:
 # --------------------------------------------------------------------------
 # the side artwork
 # --------------------------------------------------------------------------
+def zzz_sizes(word_height: int, width: int):
+    """Widths and point sizes of the three trailing z's, largest first."""
+    out = []
+    for mul in (0.46, 0.32, 0.22):
+        size = max(8, int(word_height * mul))
+        out.append((text_mask("z", font("display", size)).width + int(width * 0.005), size))
+    return out
+
+
+
 def side_art(length: int, depth: int, theme: dict, ss: int = 3) -> Image.Image:
     """Horizontal artwork for one flank: `length` runs nose->tail, `depth` is
     the height of the panel. Returned upright and readable."""
@@ -180,8 +190,19 @@ def side_art(length: int, depth: int, theme: dict, ss: int = 3) -> Image.Image:
     # --- lay the block out ----------------------------------------------
     tagline = theme["tagline"]
     scale = theme.get("block_scale", 1.0)
-    f = fit_font("display", WORDMARK, int(W * 0.79 * scale), int(H * 0.52 * scale), tracking=0.012)
+    avail = int(W * 0.90 * scale)
+    cap = int(H * 0.56 * scale)
+    f = fit_font("display", WORDMARK, avail, cap, tracking=0.012)
     word = text_mask(WORDMARK, f, tracking=0.012)
+
+    # the trailing "zzz" needs its own room: measure it against the wordmark we
+    # just sized, then give the wordmark what is left so nothing gets clipped
+    zzz = zzz_sizes(word.height, W) if theme.get("zzz") else []
+    reserve = sum(w for w, _ in zzz) + int(W * 0.014)
+    if zzz and word.width + reserve > avail:
+        f = fit_font("display", WORDMARK, avail - reserve, cap, tracking=0.012)
+        word = text_mask(WORDMARK, f, tracking=0.012)
+        zzz = zzz_sizes(word.height, W)
 
     bar_h = max(2, int(H * 0.034))
     gap_bar = int(H * 0.070)
@@ -323,17 +344,16 @@ def side_art(length: int, depth: int, theme: dict, ss: int = 3) -> Image.Image:
     art.alpha_composite(tint(tag, theme["tag_colour"], 0.9), ((W - tag.width) // 2, ty))
 
     # --- sleepy "zzz" drifting off the end of the wordmark ------------------
-    if theme.get("zzz"):
-        zx = wx + word.width + int(W * 0.014)
-        zy = wy + int(word.height * 0.10)
-        for mul in (0.46, 0.32, 0.22):
-            zm = text_mask("z", font("display", max(8, int(word.height * mul))))
-            if zx + zm.width > W - int(W * 0.005) or zy < 0:
-                break
-            art.alpha_composite(glow(zm, accent, max(2, int(H * 0.02)), 1.4), (zx, zy))
-            art.alpha_composite(tint(zm, theme["zzz"], 0.85), (zx, zy))
-            zx += zm.width + int(W * 0.005)
-            zy -= int(zm.height * 0.5)
+    zx = wx + word.width + int(W * 0.014)
+    zy = wy + int(word.height * 0.10)
+    for _, size in zzz:
+        zm = text_mask("z", font("display", size))
+        if zx + zm.width > W or zy < 0:
+            break
+        art.alpha_composite(glow(zm, accent, max(2, int(H * 0.02)), 1.4), (zx, zy))
+        art.alpha_composite(tint(zm, theme["zzz"], 0.85), (zx, zy))
+        zx += zm.width + int(W * 0.005)
+        zy -= int(zm.height * 0.5)
 
     return art.resize((length, depth), Image.LANCZOS)
 
@@ -456,8 +476,13 @@ def inset(box, fx: float, fy: float):
 
 
 def flank_box(spec: dict):
-    """The rectangle the artwork fills on each flank, nose->tail x across."""
-    return inset(spec["left"], 0.035, 0.115), inset(spec["right"], 0.035, 0.115)
+    """The rectangle the artwork fills on each flank, nose->tail x across.
+
+    The band is already trimmed to the door skins, so it only needs a small
+    margin off each edge rather than the generous one it took when the band
+    could run into the front wing.
+    """
+    return inset(spec["left"], 0.03, 0.06), inset(spec["right"], 0.03, 0.06)
 
 
 def build_car(spec: dict, theme: dict) -> Image.Image:
