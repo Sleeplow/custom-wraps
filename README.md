@@ -2,6 +2,10 @@
 
 This repository provides templates and examples for creating custom wrap designs for your Tesla's 3D vehicle visualization. Personalize your car's appearance in the Paint Shop with your own unique designs.
 
+> **Sleeplow wraps** — six ready-to-load "Sleeplow" designs live in
+> [`sleeplow/`](sleeplow/), along with the generator that produced them in
+> [`tools/`](tools/).
+
 ## How to Use Custom Wraps
 
 1. **Download** the template for your specific vehicle model (see links below)
